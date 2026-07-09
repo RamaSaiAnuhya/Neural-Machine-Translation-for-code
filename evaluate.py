@@ -9,13 +9,13 @@ from tqdm import tqdm
 import pandas as pd
 import torch
 from torch.utils.data import Dataset, DataLoader
-from dataset import CustomDataset, collate_fn
+from src.dataset import CustomDataset, collate_fn
 from nltk.translate.bleu_score import corpus_bleu, SmoothingFunction
 
-from models.attention import BahdanauAttention
-from models.encoder import Encoder
-from models.decoder import Decoder
-from models.seq2seq import Seq2Seq
+from src.models.attention import BahdanauAttention
+from src.models.encoder import Encoder
+from src.models.decoder import Decoder
+from src.models.seq2seq import Seq2Seq
 
 checkpoint_path = 'checkpoints/best_model.pt'
 output_dir = 'results'
@@ -78,9 +78,10 @@ def main():
 
     decoder = Decoder(
     code_vocab_size=config.code_vocab_size,
-    embed_vector_dim=config.embedding_dim,
+    embedding_dim=config.embedding_dim,
     hidden_dim=config.hidden_dim,
     attention=attention,
+    pad_idx=config.pad_idx,
     num_layers=config.num_layers,
     dropout=config.dropout,
     )

@@ -4,7 +4,7 @@
 embedding_dim = 256
 hidden_dim = 512
 pad_idx = 0
-num_layers = 2
+num_layers = 1
 batch_size = 64
 lr = 0.001
 dropout = 0.1
