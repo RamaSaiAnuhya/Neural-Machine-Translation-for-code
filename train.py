@@ -8,10 +8,10 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 
 from src.dataset import CustomDataset, collate_fn
-from models.attention import BahdanauAttention
-from models.encoder import Encoder
-from models.decoder import Decoder
-from models.seq2seq import Seq2Seq
+from src.models.attention import BahdanauAttention
+from src.models.encoder import Encoder
+from src.models.decoder import Decoder
+from src.models.seq2seq import Seq2Seq
 
 import config
 
