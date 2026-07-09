@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 
-from dataset import CustomDataset, collate_fn
+from src.dataset import CustomDataset, collate_fn
 from models.attention import BahdanauAttention
 from models.encoder import Encoder
 from models.decoder import Decoder
