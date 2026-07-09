@@ -119,6 +119,10 @@ def main():
     print(f'Text Vocabulary size: {len(text_word2idx)}')
     print(f'Code Vocabulary size: {len(code_word2idx)}')
 
+    with open('config.py', 'w') as f:
+        f.write(f'text_vocab_size = {len(text_word2idx)}\n')
+        f.write(f'code_vocab_size = {len(code_word2idx)}\n')
+
     # Initialize the ToIds convertor
     id_convertor = IdConvertor()
 
