@@ -19,14 +19,14 @@ def train_epoch(model, dataloader, criterion, optimizer, device, teacher_forcing
     model.train()
     running_loss = 0.0
 
-    for src, tgt, src_lenghts, tgt_lenghts in tqdm(dataloader, desc='Training', leave=False):
+    for src, tgt, src_lengths, tgt_lengths in tqdm(dataloader, desc='Training', leave=False):
         src, tgt = src.to(device), tgt.to(device)
         src_lengths = src_lengths.to(device)
 
         optimizer.zero_grad()
 
         # Forward pass
-        output = model(src, tgt, src_lenghts, teacher_forcing_ratio=teacher_forcing_ratio)
+        output = model(src, tgt, src_lengths, teacher_forcing_ratio=teacher_forcing_ratio)
         output_dim = output.shape[-1]
         output = output[:,1:].reshape(-1, output_dim)
         tgt = tgt[:,1:].reshape(-1)
@@ -47,10 +47,10 @@ def evaluate_epoch(model, dataloader, criterion, device):
     running_loss = 0.0
 
     with torch.no_grad():
-        for src, tgt, src_lenghts, tgt_lenghts in tqdm(dataloader, desc='Validation', leave=False):
+        for src, tgt, src_lengths, tgt_lengths in tqdm(dataloader, desc='Validation', leave=False):
             src, tgt = src.to(device), tgt.to(device)
             src_lengths = src_lengths.to(device)
-            output = model(src, tgt, src_lenghts, teacher_forcing_ratio=0)
+            output = model(src, tgt, src_lengths, teacher_forcing_ratio=0)
             output_dim = output.shape[-1]
             output = output[:,1:].reshape(-1, output_dim)
             tgt = tgt[:,1:].reshape(-1)

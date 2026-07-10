@@ -20,7 +20,7 @@ class Decoder(nn.Module):
             dropout=dropout if num_layers > 1 else 0,
             batch_first = True
         )
-        self.output_layer = nn.Linear((hidden_dim*2)+hidden_dim+embedding_dim, code_vocab_size)
+        self.output_layer = nn.Linear((hidden_dim*3)+embedding_dim, code_vocab_size)
 
     def forward(self, input_token, decoder_hidden, encoder_outputs):
         input_token = input_token.unsqueeze(1)

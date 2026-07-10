@@ -7,7 +7,7 @@ class BahdanauAttention(nn.Module):
         super(BahdanauAttention, self).__init__()
 
         self.Wa = nn.Linear(decoder_hidden_dim, decoder_hidden_dim, bias=False)
-        self.Ua = nn.Linear(encoder_hidden_dim * 2, decoder_hidden_dim, bias=False)
+        self.Ua = nn.Linear(encoder_hidden_dim, decoder_hidden_dim, bias=False)
         self.Va = nn.Linear(decoder_hidden_dim, 1, bias=False)
 
     def forward(self, encoder_outputs, decoder_hidden, mask=None):
