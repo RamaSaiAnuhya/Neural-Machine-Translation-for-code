@@ -15,16 +15,18 @@ from src.models.seq2seq import Seq2Seq
 
 import config
 
-def train_epoch(model, dataloader, criterion, optimizer, device):
+def train_epoch(model, dataloader, criterion, optimizer, device, teacher_forcing_ratio):
     model.train()
     running_loss = 0.0
 
     for src, tgt, src_lenghts, tgt_lenghts in tqdm(dataloader, desc='Training', leave=False):
         src, tgt = src.to(device), tgt.to(device)
+        src_lengths = src_lengths.to(device)
+
         optimizer.zero_grad()
 
         # Forward pass
-        output = model(src, tgt, src_lenghts, teacher_forcing_ratio=0.5)
+        output = model(src, tgt, src_lenghts, teacher_forcing_ratio=teacher_forcing_ratio)
         output_dim = output.shape[-1]
         output = output[:,1:].reshape(-1, output_dim)
         tgt = tgt[:,1:].reshape(-1)
@@ -47,6 +49,7 @@ def evaluate_epoch(model, dataloader, criterion, device):
     with torch.no_grad():
         for src, tgt, src_lenghts, tgt_lenghts in tqdm(dataloader, desc='Validation', leave=False):
             src, tgt = src.to(device), tgt.to(device)
+            src_lengths = src_lengths.to(device)
             output = model(src, tgt, src_lenghts, teacher_forcing_ratio=0)
             output_dim = output.shape[-1]
             output = output[:,1:].reshape(-1, output_dim)
@@ -70,6 +73,12 @@ def plot_losses(train_losses, val_losses, output_image_path="checkpoints/loss_cu
     plt.savefig(output_image_path)
     plt.close()
     print(f"Loss curves plot accurately saved to {output_image_path}")
+
+def get_teacher_forcing_ratio(epoch, num_epochs):
+    # Linear decay from 1.0 → 0.2
+    start, end = 1.0, 0.2
+    return start - (start - end) * (epoch / num_epochs)
+
 
 
 def main():
@@ -107,7 +116,7 @@ def main():
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn)
 
     encoder = Encoder(config.text_vocab_size, config.embedding_dim, config.hidden_dim, config.pad_idx)
-    attention = BahdanauAttention(config.hidden_dim)
+    attention = BahdanauAttention(config.hidden_dim * 2, config.hidden_dim)
     decoder = Decoder(config.code_vocab_size, config.embedding_dim, config.hidden_dim, attention, config.pad_idx)
     Model = Seq2Seq(encoder, decoder, device).to(device)
     
@@ -118,6 +127,8 @@ def main():
     train_losses = []
     val_losses = []
     best_val_loss = float('inf')
+    patience = 10
+    counter = 0
     save_model_path = 'checkpoints/best_model.pt'
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
@@ -127,7 +138,8 @@ def main():
 
     print('\nInitiating Model Optimization Routine')
     for epoch in range(num_epochs):
-        train_loss = train_epoch(Model, train_loader, criterion, optimizer, device)
+        teacher_forcing_ratio = get_teacher_forcing_ratio(epoch, num_epochs)
+        train_loss = train_epoch(Model, train_loader, criterion, optimizer, device, teacher_forcing_ratio)
         val_loss = evaluate_epoch(Model, val_loader, criterion, device)
 
         train_losses.append(train_loss)
@@ -145,6 +157,7 @@ def main():
         # save the best model
         if(val_loss < best_val_loss):
             best_val_loss = val_loss
+            counter = 0
             os.makedirs("checkpoints", exist_ok=True)
             torch.save({
                             "epoch": epoch,
@@ -155,6 +168,10 @@ def main():
                         },save_model_path,)
             
             print(f" => Validation loss decreased. Saving current weights to {save_model_path}")
+        else:
+            counter+=1
+            if counter >= patience:
+                print('Early Stopping triggered')
 
         scheduler.step(val_loss)
 

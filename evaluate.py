@@ -22,6 +22,59 @@ output_dir = 'results'
 
 os.makedirs(output_dir, exist_ok = True)
 
+def greedy_decode(model, src, src_lengths, max_len, sos_idx, eos_idx, device):
+    model.eval()
+    with torch.no_grad():
+        encoder_outputs, hidden, cell = model.encoder(src, src_lengths)
+        input_token = torch.tensor([sos_idx] * src.size(0), device=device)
+
+        predictions = []
+        for _ in range(max_len):
+            prediction, hidden, cell, _ = model.decoder(input_token, (hidden, cell), encoder_outputs)
+            input_token = prediction.argmax(1)
+            predictions.append(input_token.unsqueeze(1))
+
+            # Stop if all sequences predicted <EOS>
+            if (input_token == eos_idx).all():
+                break
+
+        return torch.cat(predictions, dim=1)
+
+
+def beam_search_decode(model, src, src_lengths, max_len, sos_idx, eos_idx, pad_idx, device, beam_size=5):
+    model.eval()
+    with torch.no_grad():
+        encoder_outputs, hidden, cell = model.encoder(src, src_lengths)
+        mask = (src != pad_idx).int()
+
+        # Initialize beam with SOS
+        beams = [(torch.tensor([sos_idx], device=device), hidden, cell, 0.0)]  # (sequence, hidden, cell, score)
+
+        for _ in range(max_len):
+            new_beams = []
+            for seq, h, c, score in beams:
+                input_token = seq[-1].unsqueeze(0)  # last token
+                if input_token.item() == eos_idx:
+                    new_beams.append((seq, h, c, score))
+                    continue
+
+                prediction, h_new, c_new, _ = model.decoder(input_token, (h, c), encoder_outputs, mask)
+                log_probs = torch.log_softmax(prediction, dim=1).squeeze(0)
+
+                topk_log_probs, topk_indices = torch.topk(log_probs, beam_size)
+                for k in range(beam_size):
+                    new_seq = torch.cat([seq, topk_indices[k].unsqueeze(0)])
+                    new_score = score + topk_log_probs[k].item()
+                    new_beams.append((new_seq, h_new, c_new, new_score))
+
+            # Keep top beam_size sequences
+            beams = sorted(new_beams, key=lambda x: x[3], reverse=True)[:beam_size]
+
+        # Return best sequence
+        best_seq = beams[0][0]
+        return best_seq.cpu().numpy()
+
+
 def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
@@ -74,8 +127,8 @@ def main():
     dropout=config.dropout,
     )
 
-    attention = BahdanauAttention(config.hidden_dim)
-
+    attention = BahdanauAttention(config.hidden_dim * 2, config.hidden_dim)
+    
     decoder = Decoder(
     code_vocab_size=config.code_vocab_size,
     embedding_dim=config.embedding_dim,
@@ -106,6 +159,10 @@ def main():
         model.load_state_dict(checkpoint)
 
     model.eval()
+
+    # Choose decoding method
+    use_beam_search = True  # set False to use greedy
+    print("Running inference with beam search..." if use_beam_search else "Running inference with greedy decoding...")
 
     print("Running inference (Teacher Forcing = 0)...")
     
@@ -143,20 +200,19 @@ def main():
             src = src.to(device)
             trg = trg.to(device)
 
-            # Enforce teacher_forcing_ratio = 0 for auto-regressive generation
-            # Modify this call to match your model's exact signature
-            outputs = model(
-                        src,
-                        trg,
-                        src_lengths,
-                        teacher_forcing_ratio=0
-                        )
-            
-            # If your model returns logits shape (batch, seq, vocab), take argmax:
-            if outputs.dim() == 3:
-                preds = outputs.argmax(dim=-1).cpu().numpy()
+            if use_beam_search:
+                preds = beam_search_decode(
+                    model, src, src_lengths, max_len=trg.size(1),
+                    sos_idx=code_word2idx["<SOS>"], eos_idx=code_word2idx["<EOS>"],
+                    pad_idx=config.pad_idx, device=device, beam_size=4
+                )
+                preds = [preds]  # single sequence per batch
             else:
-                preds = outputs.cpu().numpy()
+                preds = greedy_decode(
+                    model, src, src_lengths, max_len=trg.size(1),
+                    sos_idx=code_word2idx["<SOS>"], eos_idx=code_word2idx["<EOS>"],
+                    pad_idx=config.pad_idx, device=device
+                ).cpu().numpy()
 
             src_ids = src.cpu().numpy()
             trg_ids = trg.cpu().numpy()

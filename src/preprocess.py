@@ -55,34 +55,52 @@ def main():
 
     # Load Dataset
     df = pd.read_json('data/raw/conala-paired-train.json', lines=True)
-    original_size = len(df)
+    df_mined = pd.read_json('data/raw/conola-mined-subset.json', lines=True)
+    df_mined = df_mined[['intent', 'snippet']]
+
+    original_size = len(df) + len(df_mined)
 
     # Preprocess the dataset
     print('Preprocessing the dataset...')
     df['rewritten_intent'] = df['rewritten_intent'].fillna(df['intent'])
+    df = df[['rewritten_intent', 'snippet']]
     df.drop_duplicates(inplace = True)
+    df_mined.dropna()
+    df_mined.drop_duplicates(inplace=True)
+
+
+    df = df.rename(columns={'rewritten_intent': 'intent'})
 
     # Clean the dataset
     print('Cleaning the dataset...')
-    df['rewritten_intent'] = df['rewritten_intent'].apply(clean_text)
+    df['intent'] = df['intent'].apply(clean_text)
+    df_mined['intent'] = df_mined['intent'].apply(clean_text)
     df['snippet'] = df['snippet'].apply(clean_code)
+    df_mined['snippet'] = df_mined['snippet'].apply(clean_code)
 
     df = df[df['snippet'].apply(is_valid_python)]
+    df_mined = df_mined[df_mined['snippet'].apply(is_valid_python)]
 
-    df = df[(df['rewritten_intent'].str.strip() != "") & (df['snippet'].str.strip() != "")]
+    df = df[(df['intent'].str.strip() != "") & (df['snippet'].str.strip() != "")]
+    df_mined = df_mined[(df_mined['intent'].str.strip() != "") & (df_mined['snippet'].str.strip() != "")]
 
     df.reset_index(drop=True, inplace=True)
+    df_mined.reset_index(drop=True, inplace=True)
 
     # Dataset statistics before and after cleaning
     print(f"Original samples : {original_size}")
-    print(f"Remaining samples: {len(df)}")
-    print(f"Removed samples  : {original_size - len(df)}")
+    print(f"Remaining samples: {len(df) + len(df_mined)}")
+    print(f"Removed samples  : {original_size - (len(df) + len(df_mined))}")
 
     # Split the dataset into training and validation sets
     print('Splitting the dataset into training and validation sets...')
     train_df, val_df = train_test_split(
         df, test_size=0.1, shuffle=True, random_state=42
     )
+
+    # Stack them vertically
+    train_df = pd.concat([train_df, df_mined], ignore_index=True)
+
     print('Number of rows in the training set:', len(train_df))
     print('Number of rows in the validation set:', len(val_df))
  
@@ -104,10 +122,10 @@ def main():
     val_df.to_csv(os.path.join(output_dir, 'val.csv'), index = False)
 
     # Print Statistics
-    print('Average intent length: ', df['rewritten_intent'].str.split().apply(len).mean())
+    print('Average intent length: ', df['intent'].str.split().apply(len).mean())
     print('Average snippet length: ', df['snippet'].str.split().apply(len).mean())
 
-    print('Max intent length: ', df['rewritten_intent'].str.split().apply(len).max())
+    print('Max intent length: ', df['intent'].str.split().apply(len).max())
     print('Max snippet length: ', df['snippet'].str.split().apply(len).max())
 
 if __name__ == '__main__':

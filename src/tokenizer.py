@@ -91,10 +91,10 @@ def main():
 
     print("Tokenizing Text...")
     tokenized_train_text = [
-        tokenizer.tokenize_intent(text) for text in train_df['rewritten_intent']
+        tokenizer.tokenize_intent(text) for text in train_df['intent']
     ]
     tokenized_val_text = [
-        tokenizer.tokenize_intent(text) for text in val_df['rewritten_intent']
+        tokenizer.tokenize_intent(text) for text in val_df['intent']
     ]
 
 

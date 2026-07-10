@@ -1,7 +1,6 @@
 import random
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 class Seq2Seq(nn.Module):
     def __init__(self, encoder, decoder, device):
@@ -23,7 +22,7 @@ class Seq2Seq(nn.Module):
         input_token = tgt[:, 0]
 
         for t in range(1, tgt_length):
-            prediction, hidden, cell, _ = self.decoder(input_token, hidden, cell, encoder_outputs)
+            prediction, hidden, cell, _ = self.decoder(input_token, (hidden, cell), encoder_outputs)
             outputs[:, t] = prediction
             teacher_force = random.random() < teacher_forcing_ratio
             predicted_token = prediction.argmax(1)

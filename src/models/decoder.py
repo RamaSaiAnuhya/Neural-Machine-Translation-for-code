@@ -14,21 +14,23 @@ class Decoder(nn.Module):
         self.embedding = nn.Embedding(code_vocab_size, embedding_dim, padding_idx=pad_idx)
         self.dropout = nn.Dropout(dropout)
         self.lstm = nn.LSTM(
-            input_size = embedding_dim + hidden_dim,
+            input_size=(hidden_dim*2)+embedding_dim,
             hidden_size = hidden_dim,
             num_layers = num_layers,
             dropout=dropout if num_layers > 1 else 0,
             batch_first = True
         )
-        self.output_layer = nn.Linear(hidden_dim, code_vocab_size)
+        self.output_layer = nn.Linear((hidden_dim*2)+hidden_dim+embedding_dim, code_vocab_size)
 
-    def forward(self, input_token, hidden, cell, encoder_outputs):
+    def forward(self, input_token, decoder_hidden, encoder_outputs):
         input_token = input_token.unsqueeze(1)
         embedded = self.dropout(self.embedding(input_token))
-        context, attention_weights = self.attention(encoder_outputs, hidden[-1])
+        mask = (encoder_outputs.sum(dim=2) != 0).int() 
+        context, attention_weights = self.attention(encoder_outputs, decoder_hidden[0][-1], mask)
         context = context.unsqueeze(1)
         lstm_input = torch.cat((embedded, context), dim = 2)
-        output, (hidden, cell) = self.lstm(lstm_input, (hidden, cell))
-        prediction = self.output_layer(output.squeeze(1))
+        output, (hidden, cell) = self.lstm(lstm_input, decoder_hidden)
+        prediction = self.output_layer(torch.cat((output, context, embedded), dim=2))
+        prediction = prediction.squeeze(1)
 
         return prediction, hidden, cell, attention_weights
