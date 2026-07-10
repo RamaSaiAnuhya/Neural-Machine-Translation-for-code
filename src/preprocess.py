@@ -55,7 +55,7 @@ def main():
 
     # Load Dataset
     df = pd.read_json('data/raw/conala-paired-train.json', lines=True)
-    df_mined = pd.read_json('data/raw/conola-mined-subset.json', lines=True)
+    df_mined = pd.read_json('data/raw/conala-mined-subset.json', lines=True)
     df_mined = df_mined[['intent', 'snippet']]
 
     original_size = len(df) + len(df_mined)
