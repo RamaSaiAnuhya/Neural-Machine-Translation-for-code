@@ -44,21 +44,22 @@ def greedy_decode(model, src, src_lengths, max_len, sos_idx, eos_idx, device):
 def beam_search_decode(model, src, src_lengths, max_len, sos_idx, eos_idx, pad_idx, device, beam_size=5):
     model.eval()
     with torch.no_grad():
+        # src and src_lengths should be for ONE sample only
         encoder_outputs, hidden, cell = model.encoder(src, src_lengths)
         mask = (src != pad_idx).int()
 
-        # Initialize beam with SOS
-        beams = [(torch.tensor([sos_idx], device=device), hidden, cell, 0.0)]  # (sequence, hidden, cell, score)
+        beams = [(torch.tensor([sos_idx], device=device), hidden, cell, 0.0)]
 
         for _ in range(max_len):
             new_beams = []
             for seq, h, c, score in beams:
-                input_token = seq[-1].unsqueeze(0)  # last token
+                input_token = seq[-1].unsqueeze(0)  # shape (1,)
                 if input_token.item() == eos_idx:
                     new_beams.append((seq, h, c, score))
                     continue
 
-                prediction, h_new, c_new, _ = model.decoder(input_token, (h, c), encoder_outputs, mask)
+                # decoder forward now sees batch=1 consistently
+                prediction, h_new, c_new, _ = model.decoder(input_token, (h, c), encoder_outputs)
                 log_probs = torch.log_softmax(prediction, dim=1).squeeze(0)
 
                 topk_log_probs, topk_indices = torch.topk(log_probs, beam_size)
@@ -67,10 +68,8 @@ def beam_search_decode(model, src, src_lengths, max_len, sos_idx, eos_idx, pad_i
                     new_score = score + topk_log_probs[k].item()
                     new_beams.append((new_seq, h_new, c_new, new_score))
 
-            # Keep top beam_size sequences
             beams = sorted(new_beams, key=lambda x: x[3], reverse=True)[:beam_size]
 
-        # Return best sequence
         best_seq = beams[0][0]
         return best_seq.cpu().numpy()
 
@@ -197,37 +196,32 @@ def main():
 
     with torch.no_grad():
         for src, trg, src_lengths, tgt_lengths in tqdm(val_loader, desc='Evaluating'):
-            src = src.to(device)
-            trg = trg.to(device)
+            src, trg = src.to(device), trg.to(device)
+            src_lengths, tgt_lengths = src_lengths.to(device), tgt_lengths.to(device)
 
-            if use_beam_search:
+            for i in range(src.size(0)):
                 preds = beam_search_decode(
-                    model, src, src_lengths, max_len=trg.size(1),
-                    sos_idx=code_word2idx["<SOS>"], eos_idx=code_word2idx["<EOS>"],
-                    pad_idx=config.pad_idx, device=device, beam_size=4
+                model,
+                src[i:i+1],              # single sample
+                src_lengths[i:i+1],      # single length
+                max_len=trg.size(1),
+                sos_idx=code_word2idx["<SOS>"],
+                eos_idx=code_word2idx["<EOS>"],
+                pad_idx=config.pad_idx,
+                device=device,
+                beam_size=5
                 )
-                preds = [preds]  # single sequence per batch
-            else:
-                preds = greedy_decode(
-                    model, src, src_lengths, max_len=trg.size(1),
-                    sos_idx=code_word2idx["<SOS>"], eos_idx=code_word2idx["<EOS>"],
-                    pad_idx=config.pad_idx, device=device
-                ).cpu().numpy()
 
-            src_ids = src.cpu().numpy()
-            trg_ids = trg.cpu().numpy()
+                src_ids = src[i].cpu().numpy()
+                trg_ids = trg[i].cpu().numpy()
 
-            for i in range(len(src_ids)):
-                # Convert source sequence
-                intent_tokens = ids_to_tokens(src_ids[i], text_idx2word)
+                intent_tokens = ids_to_tokens(src_ids, text_idx2word)
                 raw_intents.append(" ".join(intent_tokens))
 
-                # Convert target/ground truth sequence
-                gt_tokens = ids_to_tokens(trg_ids[i], code_idx2word)
+                gt_tokens = ids_to_tokens(trg_ids, code_idx2word)
                 ground_truths.append(gt_tokens)
 
-                # Convert model prediction sequence
-                pred_tokens = ids_to_tokens(preds[i], code_idx2word)
+                pred_tokens = ids_to_tokens(preds, code_idx2word)
                 predictions.append(pred_tokens)
 
      # 5. COMPUTE METRICS
